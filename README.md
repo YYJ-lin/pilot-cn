@@ -62,7 +62,8 @@ Pilot 是给"网络畅通"的环境写的。在国内会卡在这些地方：
 
 | 能力 | 怎么用 |
 |---|---|
-| 一条命令装好整套 ERPNext | `install-cn.sh` |
+| 一条命令装到管理面板 | `install-cn.sh`（剩下在面板向导里点） |
+| 一条命令装好整套 ERPNext | `sudo bash install-cn.sh --full` |
 | 中文管理面板 | 打开面板就是中文 |
 | 从 Gitee 装应用 | 面板里粘贴 Gitee 地址 |
 | 装自建应用 | 本地目录直接挂进 bench |
@@ -82,7 +83,7 @@ Pilot 是给"网络畅通"的环境写的。在国内会卡在这些地方：
 | 权限 | root |
 | 网络 | **能访问 Gitee 即可，不需要能访问 GitHub** |
 
-### 一条命令装完
+### 一条命令装到管理面板（默认）
 
 ```bash
 curl -fsSL https://gitee.com/linxiansheng0409/pilot-cn/raw/main/install-cn.sh | sudo bash
@@ -96,29 +97,37 @@ cd ~/pilot-cn
 sudo bash install-cn.sh
 ```
 
+默认只做「环境层 + Pilot」：把 apt / pip / npm / MariaDB 源换好、装好 uv、建运行用户、
+内置 Pilot，最后把管理面板拉在 **`http://<服务器IP>:7000`** 就停。
+
+**frappe / erpnext 的仓库、版本、数据库都不预设**，全部由你在面板向导里现场选 —— 脚本不钉任何版本，
+你要 v16.49.0 就是 v16.49.0，要 version-16 就是 version-16。
+
+> GitHub 镜像：<https://github.com/YYJ-lin/pilot-cn>（国内安装请用上面的 Gitee 地址）
+
 ### 可用的选项
 
 | 选项 | 作用 |
 |---|---|
-| `--gui` | **只装到 Pilot + 一个未初始化的 bench**，剩下的在面板向导里选（见下节） |
+| （默认） | 装到面板为止：环境层 + Pilot + 拉起 7000 面板，仓库/版本/数据库在向导里选 |
+| `--full` | 命令行装到底：建 bench、建站点、装 erpnext 应用（CI / 批量部署用） |
+| `--gui` | 等同默认行为，保留以向后兼容 |
 | `--skip-preflight` | 跳过环境预检 |
 | `--skip-env` | 跳过环境层配置（已经配好了） |
-| `--skip-bench` | 只装 Pilot，不建 bench / 站点 |
+| `--skip-bench` | 只装 Pilot，连面板都不建 bench（极少用） |
 | `--bench-user USER` | 换运行用户（默认 `erpnext`） |
 
-### 想用面板向导装：`--gui`
+### 装完直接进面板
 
-不想在命令行里定死版本，就装到一半交给面板：
-
-```bash
-sudo bash install-cn.sh --gui
-```
-
-装完打开 `http://<IP>:7000`，向导里选三件事：
+打开 `http://<服务器IP>:7000`，用脚本最后打印的**面板密码**登录（密码同时存在
+`/var/lib/pilot-cn/secrets.env`），然后在向导里选三件事：
 
 1. **数据库**：引擎（MariaDB / PostgreSQL）和连接方式（新建 / 复用本机 / 外部）；
 2. **Frappe 仓库**：默认已预填 `mirrors.conf` 里配的地址（Gitee 镜像），也可以粘任意 Git 地址；
-3. **Frappe 分支或 tag**：列表**直接来自该仓库**（`git ls-remote` 的 heads + tags），所以能选到 `v16.51.0` 这种发布版本。
+3. **Frappe 分支或 tag**：列表**直接来自该仓库**（`git ls-remote` 的 heads + tags），所以能选到 `v16.49.0` 这种发布版本。
+
+⚠️ **erpnext 别选 v16.50.0 ~ v16.52.x**：那几版的源码有坏引用，装到一半会失败，
+原因和替代版本见下方「已知问题」。
 
 初始化完成后回到面板：建站点、装应用。**单站点 bench 会自动固定站点**，所以建完站点就能用 `http://<IP>:8000` 打开，不需要改 hosts。
 
@@ -145,15 +154,42 @@ sudo bash install-cn.sh --gui
 ③ 装 uv        走清华 pip 镜像
 ④ 建运行用户    创建 erpnext 用户（非 root），设密码，并给你（安装者）授权
 ⑤ 内置 Pilot   源码已经在仓库里，这一步不联网
-⑥ 建 bench+站点 从 Gitee 拉 frappe / erpnext，建站点、装 erpnext、构建前端
-⑦ 验收         自动启动，检查端口和健康状态
+⑥ 建 bench     建一个【未初始化】的 bench（不拉 frappe、不建站点）
+⑦ 验收         检查 7000 端口在听、bench 进程在跑、面板应答 HTTP 200
 ```
 
-耗时约 **20-40 分钟**（看机器和网速，前端构建最久）。
+默认流程约 **10-15 分钟**（含装 MariaDB / Node / Python 3.14）。
+之后在面板向导里拉 frappe、建站点、装 erpnext，那部分约 20-40 分钟（前端构建最久）。
+
+要命令行一把装完（老行为）：
+
+```bash
+sudo bash install-cn.sh --full
+```
+
+### 已知问题：装 erpnext 时报 "imports that don't resolve"
+
+在面板里（或 `--full`）装 erpnext 时，如果版本落在 **v16.50.0 / v16.51.x / v16.52.x**，
+会卡在 `get-app erpnext` 并回滚源码树，报错类似：
+
+```
+'erpnext' has imports that don't resolve:
+erpnext.stock.doctype.stock_entry.services.manufacturing: No module named '...'
+```
+
+原因：这些版本里的
+`erpnext/stock/doctype/stock_entry/services/material_transfer.py`
+引用了同目录下的 `manufacturing.py` 和 `stock_entry_base.py`，
+而这两个文件在那个 commit 里**根本不存在**（上游半截重构，到 v16.53.0 才随整个文件一起删掉）。
+Pilot 装应用前会逐条核对 import，命中这种坏引用就直接拒绝并回滚 —— 所以是「装不上」，不是「装坏了」。
+
+**怎么办**：选 **v16.49.0**（实测干净）或 **v16.53.0 及以上**。
+镜像里还没有 v16.53.0 的话，先去 Gitee 把 `erpnext` 镜像「强制同步」一次再选。
 
 ### 装完之后
 
-脚本会打印一段**登录凭据**，照着用就行。所有密码同时存在 `/var/lib/pilot-cn/secrets.env`。
+默认（装到面板）只打印**面板地址 + 面板密码**；站点名和 `Administrator` 密码是你在向导建站时自己设的。
+所有密码同时存在 `/var/lib/pilot-cn/secrets.env`。
 
 ---
 
@@ -209,7 +245,8 @@ sudo cat /var/lib/pilot-cn/secrets.env
 ss -tlnH | grep -E ':7000|:8000|:11000|:13000'
 ```
 
-四个端口都在（7000 面板 / 8000 ERPNext / 11000 队列 / 13000 缓存）就是正常。
+- **默认（装到面板）**：`7000` 在听就说明装到位了。8000 / 11000 / 13000 要等你在向导里建完站点才会出现。
+- **`--full`**：四个端口都在（7000 面板 / 8000 ERPNext / 11000 队列 / 13000 缓存）才算正常。
 
 ---
 
