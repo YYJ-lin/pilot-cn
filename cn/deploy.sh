@@ -46,6 +46,9 @@ RSYNC_ARGS=(
   --exclude '.git/' --exclude 'node_modules/' --exclude '__pycache__/'
   --exclude '*.pyc' --exclude '.venv/' --exclude '.admin-venv/' --exclude 'benches/'
   --filter 'P admin/backend/static/***'
+  # sync_dir 是按子目录逐个 rsync 的，传输根就是 admin/ —— 那时 admin/backend/static/***
+  # 永远匹配不上，静态产物会被 --delete 删掉（表现为面板 503）。必须再写一条相对根的规则。
+  --filter 'P backend/static/***'
 )
 
 sync_dir() {
