@@ -26,6 +26,12 @@ class Validator:
         self.checks = checks or _all_checks()
 
     def validate(self) -> None:
+        # pilot-cn：先把「已知上游缺陷」就地隔离，再跑标准校验。
+        # 放在这里而不是某个调用点，是因为安装 / 升级 / 切分支都会走 validate()。
+        from pilot.core.app.validator.known_defects import quarantine_known_defects
+
+        for message in quarantine_known_defects(self.app):
+            print(f"  [pilot-cn] {message}", flush=True)
         for check in self.checks:
             check.run(self.app)
 

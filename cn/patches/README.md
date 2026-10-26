@@ -34,6 +34,8 @@
 | `pilot/tasks/new_site.py` | 建站后同步 `default_site` 并重启 web，站点立刻可访问 |
 | `pilot/managers/environment.py` | 应用 `dev` extra 解析失败时降级为不带 extra 安装（frappe 的 pypika 冲突） |
 | `pilot/core/bench/update.py` | 市场应用更新时校验失败只告警不中断（与安装时的"信任 registry 钉住版本"保持一致） |
+| `pilot/core/app/validator/known_defects.py` | **新增**：校验前隔离已知上游缺陷文件（`material_transfer.py` 那类「引用了不存在同级模块的死代码」），安装/升级/切分支三条路径都覆盖 |
+| `pilot/core/app/validator/validator.py` | 校验前调用上面的隔离步骤 |
 
 ## 怎么用
 
