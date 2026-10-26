@@ -521,6 +521,22 @@ vendor_pilot() {
     # 保证 `pilot admin upgrade`（git pull）从 Gitee 拉取而不是本地路径。
     log "  $pilot_dir 已是 git 仓库，校正 origin 指向 $PILOT_REPO_URL"
     git -C "$pilot_dir" remote set-url origin "$PILOT_REPO_URL" 2>/dev/null || true
+
+    # 已有仓库不会被重新克隆，但「改完仓库 → 重跑安装脚本」必须立刻生效，
+    # 否则跑的还是上一次那份旧代码。这里只在工作区干净时快进到 PILOT_BRANCH
+    # 最新；benches/ 在 .gitignore 里，站点与数据不受影响。分叉或本地有改动
+    # 时保持现状并提示，用 sudo cn/deploy.sh 自行决定怎么同步。
+    if [[ -n "$(git -C "$pilot_dir" status --porcelain 2>/dev/null | head -1)" ]]; then
+      warn "  $pilot_dir 有未提交改动，跳过更新（保持现状）"
+    elif git -C "$pilot_dir" fetch --quiet --depth 1 "$PILOT_REPO_URL" "$PILOT_BRANCH" 2>/dev/null; then
+      if git -C "$pilot_dir" merge --quiet --ff-only FETCH_HEAD 2>/dev/null; then
+        log "  已快进到 $PILOT_BRANCH 最新：$(git -C "$pilot_dir" log -1 --format='%h %s' 2>/dev/null)"
+      else
+        warn "  无法快进（本地有额外提交或已分叉），保持现有代码；需要时用 sudo cn/deploy.sh"
+      fi
+    else
+      warn "  拉取 $PILOT_REPO_URL 失败（离线？），保持现有代码"
+    fi
   else
     # 直接从 Gitee 克隆，origin 正确，后续升级走 git pull（国内可用）。
     [[ -d "$pilot_dir" ]] && rm -rf "$pilot_dir"
