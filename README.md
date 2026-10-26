@@ -186,9 +186,16 @@ erpnext.stock.doctype.stock_entry.services.manufacturing: No module named '...'
 
 Pilot 装应用前会逐条核对 import，命中这种坏引用就直接拒绝并回滚 —— 所以是「装不上」，不是「装坏了」。
 
-**怎么办**：选 **v16.49.0**（实测干净、能过全部校验）。
-等上游把 `manufacturing.py` / `stock_entry_base.py` 补回 `version-16` 再升级；
-注意 erpnext **没有 v16.53.0 这个 tag**（那是 frappe 的版本号），别照着 frappe 的版本号去选。
+**现在不用你动手了**：pilot-cn 会在校验前把这类「引用了不存在同级模块的死代码」
+自动重命名为 `<name>.py.disabled-upstream`（见 `pilot/core/app/validator/known_defects.py`），
+所以 v16.50.x ~ v16.52.x 也能正常安装 —— **实测 v16.52.1 一次装通**（安装日志里会有一行
+`[pilot-cn] 已隔离已知上游缺陷：…`）。文件仍留在源码树里，`git checkout` 可还原，
+运行时不受影响（没人 import 它）。
+
+覆盖范围：安装、`pilot update`、切分支三条路径都走同一个 `validate()`，所以升级也不会再被它卡住。
+若上游哪天补齐了 `manufacturing.py` / `stock_entry_base.py`，隔离会自动不再介入。
+
+（注意 erpnext **没有 v16.53.0 这个 tag**，那是 frappe 的版本号，别照着 frappe 的版本号去选。）
 
 ### 面板「应用市场」里的版本为什么不是最新
 
