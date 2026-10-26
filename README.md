@@ -180,11 +180,33 @@ erpnext.stock.doctype.stock_entry.services.manufacturing: No module named '...'
 原因：这些版本里的
 `erpnext/stock/doctype/stock_entry/services/material_transfer.py`
 引用了同目录下的 `manufacturing.py` 和 `stock_entry_base.py`，
-而这两个文件在那个 commit 里**根本不存在**（上游半截重构，到 v16.53.0 才随整个文件一起删掉）。
+而这两个文件在那个 commit 里**根本不存在**（上游半截重构）。
+2026-10 实测：当前最新的 **v16.52.1**、以及 `version-16` 分支顶端都还是这样，只有 `develop` 补齐了 ——
+也就是说**「选最新版」目前反而装不上**。
+
 Pilot 装应用前会逐条核对 import，命中这种坏引用就直接拒绝并回滚 —— 所以是「装不上」，不是「装坏了」。
 
-**怎么办**：选 **v16.49.0**（实测干净）或 **v16.53.0 及以上**。
-镜像里还没有 v16.53.0 的话，先去 Gitee 把 `erpnext` 镜像「强制同步」一次再选。
+**怎么办**：选 **v16.49.0**（实测干净、能过全部校验）。
+等上游把 `manufacturing.py` / `stock_entry_base.py` 补回 `version-16` 再升级；
+注意 erpnext **没有 v16.53.0 这个 tag**（那是 frappe 的版本号），别照着 frappe 的版本号去选。
+
+### 面板「应用市场」里的版本为什么不是最新
+
+面板不实时查 GitHub/Gitee，它读的是一份 **registry 快照**：`MARKETPLACE_REPO_URL`
+（默认 `gitee.com/linxiansheng0409/marketplace`）里的 `apps/<app>.json`，克隆到
+`/home/erpnext/pilot/system/registry-cache`。每个应用登记几个通道（stable / nightly）
+加对应分支与 commit，面板就按这份清单渲染。
+
+快照不会自动更新（没装定时器），要手动刷：
+
+```bash
+sudo -u erpnext -H bash /home/erpnext/pilot/cn/marketplace-refresh.sh
+```
+
+它会对每个应用跑 `git ls-remote` 取分支顶端与最新 tag，重写 `apps/*.json` 并
+`git commit` 回 registry 仓库。**推送回 Gitee 需要凭据** —— 没有凭据时脚本会提示
+「已 commit，push 失败」，此时只有本机面板看到新版，别人装不到，下次刷新又会被
+`reset --hard` 拽回远端旧值。
 
 ### 装完之后
 

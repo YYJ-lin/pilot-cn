@@ -40,8 +40,9 @@ BENCH_DIR="${PILOT_HOME}/benches/${BENCH_NAME}"
 # ---------------------------------------------------------------------------
 # 已知坏版本护栏：erpnext v16.50.0 ~ v16.52.x 的
 #   erpnext/stock/doctype/stock_entry/services/material_transfer.py
-# 引用了同目录下不存在的 manufacturing.py / stock_entry_base.py（上游半截重构，
-# v16.53.0 才随整个文件删掉）。Pilot 装应用前会逐条核对 import，命中即
+# 引用了同目录下不存在的 manufacturing.py / stock_entry_base.py（上游半截重构；
+# 到 2026-10 的 v16.52.1 与 version-16 顶端仍是如此，develop 才补齐）。
+# Pilot 装应用前会逐条核对 import，命中即
 # "imports that don't resolve" 并回滚——所以要在这里早失败，别等克隆+构建跑完。
 # 面板向导里选版本时由用户自己规避，这里只管命令行钉版本的情况。
 # ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ check_known_bad_erpnext_branch() {
     die "erpnext 的 ${want} 有已知坏引用，装不上（会报 imports that don't resolve）：
   erpnext/stock/doctype/stock_entry/services/material_transfer.py
   引用了同目录下不存在的 manufacturing.py / stock_entry_base.py。
-请改 config/mirrors.conf 的 ERPNEXT_BRANCH：用 v16.49.0（实测干净）或 v16.53.0+。
+请改 config/mirrors.conf 的 ERPNEXT_BRANCH：用 v16.49.0（实测干净），或等上游修好再升。
 不钉版本（PIN_VERSIONS=0，默认）则不会走到这里。"
   fi
 }
