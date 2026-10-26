@@ -3,7 +3,8 @@
 #  pilot-cn 安装入口（root 阶段）
 #
 #  这是用户唯一需要跑的命令。它把整套流程串起来：
-#    预检 → 环境层 → 装 uv → 建运行用户 → 内置 Pilot 到用户目录 → 建 bench/站点
+#    预检 → 环境层 → 装 uv → 建运行用户 → 内置 Pilot → 拉起 7000 面板（默认到此为止）
+#    加 --full 才继续：建 bench、建站点、装 erpnext 应用
 #
 #  用法（先克隆仓库，再以 root 运行）：
 #    git clone https://gitee.com/<账号>/pilot-cn ~/pilot
@@ -65,7 +66,7 @@ parse_args() {
       --gui)            INSTALL_MODE_CLI="panel" ;;
       --bench-user)     BENCH_USER_OVERRIDE="${2:?--bench-user 需要用户名}"; shift ;;
       -h|--help)
-        sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
         exit 0 ;;
       *) echo "[错误] 未知参数：$1"; exit 1 ;;
     esac
