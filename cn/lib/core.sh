@@ -261,6 +261,22 @@ probe_git_proxy() {
   [[ "$code" == "200" ]]
 }
 
+# Gitee 公开 API：仓库本身是否存在；返回默认分支与最近推送日期。
+# 用于 PIN_VERSIONS=0（不钉版本）时——那时没有分支可查，但要确认仓库可达。
+gitee_repo_info() {
+  local repo="$1"
+  curl -fsS --max-time "${PROBE_TIMEOUT}" \
+    "https://gitee.com/api/v5/repos/${repo}" 2>/dev/null \
+    | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+    branch = d.get("default_branch") or "?"
+    pushed = (d.get("pushed_at") or "?")[:10]
+    print(f"默认分支 {branch} · 最近推送 {pushed}")
+except Exception:
+    print("")' 2>/dev/null || echo ""
+}
+
 # Gitee 公开 API：查某仓库某分支是否存在，返回最近提交信息。
 gitee_branch_info() {
   local repo="$1" branch="$2"

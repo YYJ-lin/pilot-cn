@@ -77,9 +77,18 @@ check_system() {
     report_ok "内存" "$((mem/1024))GB"
   fi
 
-  [[ "$disk" -ge 25 ]] \
-    && report_ok "磁盘" "根分区可用 ${disk}GB" \
-    || report_block "磁盘" "仅 ${disk}GB，至少需要 25GB（推荐 50GB）"
+  # 面板模式只装环境层 + Pilot，不克隆 frappe/erpnext、不装 node_modules；
+  # 完整安装（--full）才需要把两套源码和依赖都放下，所以阈值分开。
+  local disk_min=25
+  [[ "${INSTALL_MODE:-panel}" == "panel" ]] && disk_min=10
+  if [[ "$disk" -ge "$disk_min" ]]; then
+    report_ok "磁盘" "根分区可用 ${disk}GB（本次需要 ${disk_min}GB）"
+    if [[ "$disk_min" -eq 10 && "$disk" -lt 25 ]]; then
+      report_yellow "磁盘余量偏紧" "面板里装 frappe+erpnext 还要约 15GB；当前 ${disk}GB，建议先清理"
+    fi
+  else
+    report_block "磁盘" "仅 ${disk}GB，至少需要 ${disk_min}GB（推荐 50GB）"
+  fi
 
   local missing=()
   for t in curl git python3; do
@@ -143,6 +152,16 @@ check_sources() {
     fi
 
     if [[ "$url" == *gitee.com* ]]; then
+      # PIN_VERSIONS=0 时没有分支可查：只确认仓库本身可达（版本在面板里选）。
+      if [[ -z "$branch" ]]; then
+        info="$(gitee_repo_info "$slug")"
+        if [[ -n "$info" ]]; then
+          report_ok "$name" "${slug} 可达（未钉版本，${info}）"
+        else
+          report_block "$name" "${slug} 不存在或 Gitee 不可达"
+        fi
+        return
+      fi
       info="$(gitee_branch_info "$slug" "$branch")"
       if [[ -n "$info" ]]; then
         report_ok "$name" "${slug}@${branch}  ${info:0:60}"
