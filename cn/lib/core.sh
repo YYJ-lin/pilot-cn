@@ -40,8 +40,16 @@ load_config() {
 
   : "${TARGET_OS:=ubuntu-24.04}"
   : "${ROLE:=server}"
-  : "${FRAPPE_BRANCH:=version-16}"
-  : "${ERPNEXT_BRANCH:=version-16}"
+  # PIN_VERSIONS=0（默认）不钉版本：把两个分支清空，交给 bench.toml / 面板向导。
+  : "${PIN_VERSIONS:=0}"
+  : "${INSTALL_MODE:=panel}"
+  if [[ "${PIN_VERSIONS}" -eq 0 ]]; then
+    FRAPPE_BRANCH=""
+    ERPNEXT_BRANCH=""
+  else
+    : "${FRAPPE_BRANCH:=version-16}"
+    : "${ERPNEXT_BRANCH:=version-16}"
+  fi
   : "${PYTHON_VERSION:=3.14}"
   : "${NODE_MAJOR:=24}"
   : "${MARIADB_VERSION:=11.8}"

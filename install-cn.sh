@@ -16,7 +16,8 @@
 #    --skip-preflight   跳过预检（已有结论时）
 #    --skip-env         跳过环境层（已配好时）
 #    --skip-bench       只装 Pilot，不建 bench/站点
-#    --gui              只装到 Pilot 就停，剩下的在面板向导里选仓库/版本/数据库
+#    --full            命令行装到底：建 bench、建站点、装 erpnext（默认只装到面板）
+#    --gui             等价于默认行为（装到面板为止），保留以向后兼容
 #    --bench-user USER  运行用户（覆盖 mirrors.conf 里的 RUN_USER）
 # ============================================================================
 
@@ -34,6 +35,7 @@ SKIP_PREFLIGHT=0
 SKIP_ENV=0
 SKIP_BENCH=0
 GUI_MODE=0
+INSTALL_MODE_CLI=""
 BENCH_USER_OVERRIDE=""
 
 # ---------------------------------------------------------------------------
@@ -59,7 +61,8 @@ parse_args() {
       --skip-preflight) SKIP_PREFLIGHT=1 ;;
       --skip-env)       SKIP_ENV=1 ;;
       --skip-bench)     SKIP_BENCH=1 ;;
-      --gui)            GUI_MODE=1 ;;
+      --full)           INSTALL_MODE_CLI="full" ;;
+      --gui)            INSTALL_MODE_CLI="panel" ;;
       --bench-user)     BENCH_USER_OVERRIDE="${2:?--bench-user 需要用户名}"; shift ;;
       -h|--help)
         sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -83,6 +86,15 @@ main() {
   load_config
   detect_arch
   detect_os
+
+  # 命令行显式指定优先于 mirrors.conf 里的 INSTALL_MODE。
+  # panel（默认）= 装到面板为止；full = 命令行装到底。
+  [[ -n "$INSTALL_MODE_CLI" ]] && INSTALL_MODE="$INSTALL_MODE_CLI"
+  if [[ "${INSTALL_MODE:-panel}" == "full" ]]; then
+    GUI_MODE=0
+  else
+    GUI_MODE=1
+  fi
 
   [[ -n "$BENCH_USER_OVERRIDE" ]] && RUN_USER="$BENCH_USER_OVERRIDE"
   resolve_passwords
@@ -137,8 +149,10 @@ main() {
   # ---- 阶段 7：验收（确认真的装好了，而不是只看"下一步"提示）----
   if [[ "${AUTO_VERIFY:-1}" -ne 1 ]]; then
     warn "已按 AUTO_VERIFY=0 跳过验收"
-  elif [[ "$SKIP_BENCH" -eq 1 || "$GUI_MODE" -eq 1 ]]; then
-    log "只装 Pilot / GUI 模式，跳过站点验收"
+  elif [[ "$GUI_MODE" -eq 1 ]]; then
+    verify_panel "$RUN_USER" "$pilot_dir" || warn "面板验收有异常项，请看上面的逐项结果"
+  elif [[ "$SKIP_BENCH" -eq 1 ]]; then
+    log "只装 Pilot（--skip-bench），跳过验收"
   else
     verify_install "$RUN_USER" "$pilot_dir" || warn "验收有异常项，请看上面的逐项结果"
   fi
@@ -147,7 +161,10 @@ main() {
   printf '  Pilot 目录：%s\n' "$pilot_dir"
   printf '  bench：%s\n' "$BENCH_NAME"
   printf '  站点：%s\n' "$SITE_NAME"
-  if [[ "$SKIP_BENCH" -eq 1 ]]; then
+  if [[ "$GUI_MODE" -eq 1 ]]; then
+    ok "已装到面板为止。打开 http://<服务器IP>:7000 继续"
+    print_panel_credentials
+  elif [[ "$SKIP_BENCH" -eq 1 ]]; then
     ok "只装了 Pilot。下一步： sudo -u $RUN_USER -H bash $pilot_dir/cn/install-bench.sh"
   else
     ok "下一步启动： sudo -u $RUN_USER -H bash -lc 'cd $pilot_dir && bin/pilot -b $BENCH_NAME start'"
@@ -169,7 +186,7 @@ gui_setup() {
   run_uid="$(id -u "$run_user")"
   bench_dir="${pilot_dir}/benches/${BENCH_NAME}"
 
-  banner "准备面板安装向导（--gui）"
+  banner "准备面板安装向导（装到面板为止）"
 
   if [[ -f "${bench_dir}/bench.toml" ]]; then
     log "bench ${BENCH_NAME} 已存在，跳过 pilot new"
@@ -202,7 +219,11 @@ gui_setup() {
     printf '\n  打开上面的地址，在向导里选：\n'
     printf '    · 数据库引擎与连接方式\n'
     printf '    · Frappe 仓库（已预填 %s）\n' "${FRAPPE_REPO:-官方 GitHub}"
-    printf '    · Frappe 分支/版本（已预填 %s）\n' "${FRAPPE_BRANCH:-默认分支}"
+    if [[ -n "${FRAPPE_BRANCH:-}" ]]; then
+      printf '    · Frappe 版本（已预填 %s）\n' "$FRAPPE_BRANCH"
+    else
+      printf '    · Frappe 版本（不预设，向导会列出该仓库的分支与 tag 让你选）\n'
+    fi
     printf '\n  选 GitHub 也能装通：环境层已把 github.com 改写到国内可达的代理。\n\n'
   else
     warn "面板 60 秒内没起来，请看 ${bench_dir}/bench-start.log"
@@ -241,6 +262,60 @@ if seen:
     print("  预填: " + ", ".join(seen))
 PY
   ok "向导默认值已预填"
+}
+
+# ---------------------------------------------------------------------------
+# 面板模式验收：只确认「面板真的起来了」。站点与应用交给向导，这里没有站点可验。
+# ---------------------------------------------------------------------------
+verify_panel() {
+  local run_user="$1" pilot_dir="$2"
+  local fails=0 code ip
+  ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+
+  banner "验收（面板）"
+
+  if ss -tlnH "sport = :7000" 2>/dev/null | grep -q .; then
+    ok "端口 7000 在监听（管理面板）"
+  else
+    warn "端口 7000 没在监听（管理面板）"; fails=$((fails + 1))
+  fi
+
+  if pgrep -u "$run_user" -f "bin/pilot -b ${BENCH_NAME} start" >/dev/null 2>&1; then
+    ok "bench 进程在运行"
+  else
+    warn "bench 进程不在运行"; fails=$((fails + 1))
+  fi
+
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:7000/" 2>/dev/null || echo 000)"
+  if [[ "$code" == "200" ]]; then
+    ok "管理面板应答 HTTP 200"
+  else
+    warn "管理面板应答 HTTP ${code}"; fails=$((fails + 1))
+  fi
+
+  printf '\n  面板地址：http://%s:7000\n' "${ip:-<服务器IP>}"
+  if [[ "$fails" -eq 0 ]]; then
+    ok "验收全部通过"
+    return 0
+  fi
+  warn "面板验收有 ${fails} 项异常（日志：${pilot_dir}/benches/${BENCH_NAME}/bench-start.log）"
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# 面板模式的凭据：站点和 Administrator 密码要等向导建站时才有，这里只给面板入口。
+# ---------------------------------------------------------------------------
+print_panel_credentials() {
+  local ip
+  ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+  [[ -n "$ip" ]] || ip="<服务器IP>"
+
+  printf '\n%b\n' "${c_bold}================ 面板入口 ================${c_reset}"
+  printf '  %-22s %s\n' "Pilot 管理面板" "http://${ip}:7000"
+  printf '  %-22s %s\n' "面板密码"       "$PILOT_ADMIN_PASSWORD"
+  printf '\n  %s\n' "站点名、Administrator 密码在向导建站时由你自己设置。"
+  printf '  %s\n' "密码也存于 $CN_SECRETS_FILE（600）。"
+  printf '%b\n' "${c_bold}=========================================${c_reset}"
 }
 
 # ---------------------------------------------------------------------------
