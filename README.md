@@ -234,6 +234,12 @@ sudo -u erpnext -H bash /home/erpnext/pilot/cn/marketplace-refresh.sh
 | **ERPNext 账号** | `Administrator` | 密码见下方 |
 | **Pilot 管理面板** | `http://192.168.1.102:7000` | 装应用 / 备份 / 看日志 / 改配置 |
 
+> **监听范围**：面板 `7000` 与站点 `8000` 都监听所有网卡（`0.0.0.0`），局域网直连即可。
+> 注意 lite 模式下 web 进程默认只绑 `127.0.0.1`（表现为「面板能开、站点打不开」，
+> 浏览器报 `ERR_CONNECTION_REFUSED`），pilot-cn 已把 `processes/definitions.py`
+> 的 `--host` 改成 `0.0.0.0`。用 `127.0.0.1` 直接访问会 404 —— Frappe 按 Host 选站点，
+> 站点名是 `erp.local`；本机 IP 有软链（`sites/<IP> -> erp.local`），所以 `http://<IP>:8000` 可用。
+
 > **用 IP 直接能打开，不用改 hosts。**
 > Frappe 默认按请求的 `Host` 头选站点，所以直接开 `http://<IP>:8000` 本来会 404（`<IP> does not exist`）。
 > Pilot 国内版做了两件事：**bench 里只有一个站点时，自动把它固定为默认站点**（等价于 frappe 的 `bench use`），
