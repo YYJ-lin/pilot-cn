@@ -124,7 +124,11 @@ class ProcessDefinitionBuilder:
             str(self.python),
             "-m",
             "frappe.runner",
-            "--host=127.0.0.1",
+            # pilot-cn：lite 模式原先只绑 127.0.0.1，于是 http://<IP>:8000 在
+            # 局域网里直接 connection refused（面板 7000 却绑的是所有网卡，表现
+            # 就是「面板能开、站点打不开」）。国内部署基本都是内网直连，这里改成
+            # 对外监听。生产模式走 nginx，不受这行影响。
+            "--host=0.0.0.0",
             f"--port={self.bench.config.http_port}",
             f"--queue={','.join(self.bench.config.workers.queues)}",
             f"--job-threads={self.bench.config.workers.count}",
